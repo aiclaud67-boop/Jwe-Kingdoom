@@ -1,0 +1,60 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          unzip -q jewel-legend-v2.zip -d _x
+          mv _x/jewel-legend app
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm install
+
+      - name: Add Android platform
+        working-directory: app
+        run: npx cap add android
+
+      - name: Generate icons and splash
+        working-directory: app
+        run: npx capacitor-assets generate --android
+
+      - name: Portrait and vibration
+        working-directory: app
+        run: |
+          sed -i 's/<activity/<activity android:screenOrientation="portrait"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's|</manifest>|    <uses-permission android:name="android.permission.VIBRATE" />\n</manifest>|' android/app/src/main/AndroidManifest.xml
+
+      - name: Sync web assets
+        working-directory: app
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: jewel-legend-apk
+          path: app/android/app/build/outputs/apk/debug/*.apk
